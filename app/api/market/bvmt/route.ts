@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server"
+import * as cheerio from "cheerio"
+
+const SCRAPE_DO_API_URL = "https://api.scrape.do"
+const INVESTING_TUNISIA_URL = "https://www.investing.com/equities/tunisia"
 
 // BVMT Stock Data - Tunisian Stock Exchange
 export interface BVMTStock {
@@ -59,21 +63,58 @@ const TUNISIAN_STOCKS: BVMTStock[] = [
 ]
 
 export async function GET() {
-  // BVMT doesn't have a public API, so we simulate real-time data
-  // In production, you would scrape or use an authorized data feed
-  
   const now = new Date()
   const isMarketOpen = isWithinTradingHours(now)
-  
-  // Generate realistic stock data based on Tunisian market
+  const token = process.env.SCRAPE_DO_TOKEN
+
+  if (token) {
+    try {
+      const scrapeParams = new URLSearchParams({
+        token,
+        url: INVESTING_TUNISIA_URL,
+        render: "true",
+      })
+
+      const response = await fetch(`${SCRAPE_DO_API_URL}/?${scrapeParams.toString()}`, {
+        method: "GET",
+        headers: {
+          Accept: "text/html",
+        },
+        next: { revalidate: 60 },
+      })
+
+      if (response.ok) {
+        const html = await response.text()
+        const stocks = extractBVMTStocksFromHtml(html, now)
+
+        if (stocks.length > 0) {
+          const indices = generateIndices(stocks, now)
+
+          return NextResponse.json({
+            success: true,
+            source: "investing-scrape-do",
+            market_status: isMarketOpen ? "open" : "closed",
+            trading_hours: "09:00 - 14:00 CET (Tunisian Market)",
+            data: {
+              stocks,
+              indices,
+            },
+            last_updated: now.toISOString(),
+            note: "Live Tunisia equities data scraped from Investing.com via scrape.do.",
+          })
+        }
+      }
+    } catch (error) {
+      console.error("BVMT scrape failed, falling back to simulated data:", error)
+    }
+  }
+
   const stocks = generateRealisticStockData(now)
-  
-  // TUNINDEX and other indices
   const indices = generateIndices(stocks, now)
 
   return NextResponse.json({
     success: true,
-    source: "bvmt",
+    source: "bvmt-fallback",
     market_status: isMarketOpen ? "open" : "closed",
     trading_hours: "09:00 - 14:00 CET (Tunisian Market)",
     data: {
@@ -81,8 +122,89 @@ export async function GET() {
       indices,
     },
     last_updated: now.toISOString(),
-    note: "Data simulated based on BVMT patterns. Connect to official BVMT feed for production.",
+    note: token
+      ? "Live scrape unavailable right now. Showing fallback data."
+      : "Set SCRAPE_DO_TOKEN in .env.local to enable live Tunisia equities data.",
   })
+}
+
+function extractBVMTStocksFromHtml(html: string, date: Date): BVMTStock[] {
+  const $ = cheerio.load(html)
+  const rows: BVMTStock[] = []
+  const timestamp = date.toISOString()
+
+  $("table > tbody > tr").each((_, row) => {
+    const cells = $(row).find("td")
+    if (cells.length < 3) {
+      return
+    }
+
+    const values = cells
+      .toArray()
+      .map((cell) => normalizeText($(cell).text()))
+      .filter(Boolean)
+
+    if (values.length < 3) {
+      return
+    }
+
+    const name = values[0]
+    const priceText = values[1]
+    const changeText = values.find((value) => value.includes("%")) ?? values[2]
+    const price = parseNumber(priceText)
+    const changePercent = parsePercent(changeText)
+
+    if (!name || !Number.isFinite(price)) {
+      return
+    }
+
+    const symbol = inferSymbol(name, values)
+    const change = +((price * changePercent) / 100).toFixed(2)
+
+    rows.push({
+      symbol,
+      name,
+      sector: "Unknown",
+      price,
+      change,
+      change_percent: changePercent,
+      open: price,
+      high: price,
+      low: price,
+      volume: 0,
+      last_updated: timestamp,
+    })
+  })
+
+  return rows.slice(0, 50)
+}
+
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim()
+}
+
+function parseNumber(value: string): number {
+  const cleaned = value.replace(/[^0-9,.-]/g, "").replace(/,/g, "")
+  const parsed = Number.parseFloat(cleaned)
+  return Number.isFinite(parsed) ? parsed : Number.NaN
+}
+
+function parsePercent(value: string): number {
+  const cleaned = value.replace(/[^0-9+.-]/g, "")
+  const parsed = Number.parseFloat(cleaned)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function inferSymbol(name: string, values: string[]): string {
+  for (const value of values) {
+    const match = value.match(/\b[A-Z]{2,6}\b/)
+    if (match) {
+      return match[0]
+    }
+  }
+
+  const compact = name.toUpperCase().replace(/[^A-Z]/g, "")
+  return compact.slice(0, 6) || "N/A"
 }
 
 function isWithinTradingHours(date: Date): boolean {

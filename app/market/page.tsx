@@ -76,7 +76,7 @@ export default async function MarketPage() {
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <p className="text-xs text-muted-foreground">
                 <strong>Disclaimer:</strong> Market data is provided for informational purposes only. 
-                BVMT data is simulated based on real market patterns - for production use, connect to official BVMT data feeds. 
+                BVMT/Tunisia equities data is scraped from Investing.com via scrape.do when configured, with fallback data shown if live scraping is unavailable. 
                 Cryptocurrency data is sourced from CoinMarketCap API (demo data shown without API key). 
                 Always do your own research before making investment decisions. 
                 Past performance does not guarantee future results.
