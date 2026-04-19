@@ -26,6 +26,7 @@ interface DashboardSidebarProps {
 
 const navigation = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Opportunities", href: "/dashboard/invest", icon: TrendingUp },
   { name: "Portfolio", href: "/dashboard/portfolio", icon: Wallet },
   { name: "Recommendations", href: "/dashboard/recommendations", icon: Lightbulb },
   { name: "Transactions", href: "/dashboard/transactions", icon: History },
