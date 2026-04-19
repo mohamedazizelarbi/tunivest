@@ -2,7 +2,17 @@
 
 export type RiskProfile = 'conservative' | 'moderate' | 'aggressive';
 export type InvestmentCategory = 'bonds' | 'stocks' | 'funds' | 'real_estate' | 'crypto';
-export type TransactionType = 'buy' | 'sell' | 'dividend' | 'withdrawal';
+export type TransactionType = 'buy' | 'sell' | 'dividend' | 'withdrawal' | 'deposit';
+export type PersonalityType = 'analyst' | 'diplomat' | 'sentinel' | 'explorer';
+export type AgeRange = 'under_18' | '18_25' | '26_35' | '36_50' | '50_plus';
+export type EmploymentStatus = 'student' | 'employed' | 'self_employed' | 'unemployed';
+export type MonthlyIncomeRange = 'lt_1000' | '1000_3000' | 'gt_3000';
+export type SavingsRange = 'lt_500' | '500_2000' | '2000_5000' | 'gt_5000';
+export type RiskTolerance = 'low' | 'medium' | 'high';
+export type InvestmentKnowledge = 'beginner' | 'intermediate' | 'advanced';
+export type PrimaryGoal = 'preserve_money' | 'grow_steadily' | 'maximize_profits';
+export type InvestmentDuration = 'short' | 'medium' | 'long';
+export type InvestmentPreference = 'stocks' | 'crypto' | 'real_estate' | 'forex' | 'business';
 
 export interface Profile {
   id: string;
@@ -84,6 +94,25 @@ export interface Simulation {
   projected_value: number;
   created_at: string;
   investment?: Investment;
+}
+
+export interface UserProfile {
+  user_id: string;
+  personality_type: PersonalityType;
+  age_range: AgeRange;
+  employment_status: EmploymentStatus;
+  monthly_income_range: MonthlyIncomeRange;
+  savings_range: SavingsRange;
+  risk_tolerance: RiskTolerance;
+  investment_knowledge: InvestmentKnowledge;
+  primary_goal: PrimaryGoal;
+  investment_duration: InvestmentDuration;
+  preferences: InvestmentPreference[];
+  budget_min_tnd: number;
+  budget_max_tnd: number;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Dashboard statistics
