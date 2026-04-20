@@ -83,12 +83,27 @@ export function buildInvestmentCatalog(options: {
   const cryptoOpportunities = options.cryptoAssets.map(buildCryptoOpportunity)
   const globalOpportunities = options.globalStocks.map(buildGlobalOpportunity)
 
-  return [...bvmtOpportunities, ...cryptoOpportunities, ...globalOpportunities].sort((left, right) => {
+  const deduped = dedupeById([...bvmtOpportunities, ...cryptoOpportunities, ...globalOpportunities])
+
+  return deduped.sort((left, right) => {
     if (right.expectedReturn !== left.expectedReturn) {
       return right.expectedReturn - left.expectedReturn
     }
 
     return right.riskLevel - left.riskLevel
+  })
+}
+
+function dedupeById(opportunities: InvestmentOpportunity[]) {
+  const seen = new Set<string>()
+
+  return opportunities.filter((opportunity) => {
+    if (seen.has(opportunity.id)) {
+      return false
+    }
+
+    seen.add(opportunity.id)
+    return true
   })
 }
 

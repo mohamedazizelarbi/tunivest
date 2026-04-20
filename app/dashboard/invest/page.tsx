@@ -1,33 +1,82 @@
 import { createClient } from "@/lib/supabase/server"
 import { InvestmentOpportunitiesTab, type InvestmentOpportunity, type MarketSnapshot } from "@/components/dashboard/investment-opportunities-tab"
+import type { RiskProfile } from "@/lib/types"
+import {
+  buildInvestmentCatalog,
+  buildPublicAIRecommendation,
+  buildPublicMarketSnapshot,
+  type BvmtStockFeedItem,
+  type CryptoFeedItem,
+  type GlobalStockFeedItem,
+} from "@/lib/investments/catalog"
 
-const categoryLabels: Record<string, string> = {
-  bonds: "Bonds",
-  stocks: "Stocks",
-  funds: "Funds",
-  real_estate: "Real Estate",
-  crypto: "Crypto",
-}
-
-function toBudgetBand(minAmount: number) {
-  if (minAmount < 1000) return "< 1,000 TND"
-  if (minAmount <= 10000) return "1,000 - 10,000 TND"
-  return "> 10,000 TND"
-}
-
-function toThemeTag(category: string, riskLevel: number) {
-  if (riskLevel <= 3) return "Stable Asset"
-  if (riskLevel >= 8) return "Venture Risk"
-
-  const byCategory: Record<string, string> = {
-    bonds: "Income Security",
-    funds: "Diversified Fund",
-    real_estate: "Tangible Asset",
-    stocks: "Growth Potential",
-    crypto: "High Momentum",
+type BvmtFeedResponse = {
+  success: boolean
+  source: string
+  market_status: string
+  trading_hours: string
+  data: {
+    stocks: BvmtStockFeedItem[]
   }
+  last_updated: string
+  note?: string
+}
 
-  return byCategory[category] || "Balanced Growth"
+type CryptoFeedResponse = {
+  success: boolean
+  source: string
+  data: CryptoFeedItem[]
+  message?: string
+}
+
+type GlobalFeedResponse = {
+  success: boolean
+  source: string
+  data: {
+    stocks: GlobalStockFeedItem[]
+  }
+  last_updated: string
+  note?: string
+}
+
+function getBaseUrl() {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return "http://localhost:3000"
+}
+
+async function fetchJson<T>(url: string): Promise<T | null> {
+  try {
+    const response = await fetch(url, {
+      next: { revalidate: 60 },
+    })
+
+    if (!response.ok) return null
+
+    return (await response.json()) as T
+  } catch {
+    return null
+  }
+}
+
+function categoryLabelToSector(sourceLabel: string) {
+  return sourceLabel
+}
+
+function toDashboardOpportunity(
+  item: ReturnType<typeof buildInvestmentCatalog>[number],
+): InvestmentOpportunity {
+  return {
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    expectedReturn: item.expectedReturn,
+    minEntry: item.minAmount,
+    sector: categoryLabelToSector(item.sourceLabel),
+    budgetBand: item.budgetBand,
+    themeTag: item.themeTag,
+    riskLevel: item.riskLevel,
+  }
 }
 
 export default async function InvestOpportunitiesPage() {
@@ -36,66 +85,40 @@ export default async function InvestOpportunitiesPage() {
 
   if (!user) return null
 
-  const [{ data: investments }, { data: recommendation }, { data: liquidityRows }] = await Promise.all([
-    supabase
-      .from("investments")
-      .select("id, name, description, min_amount, expected_return, category, risk_level")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(8),
-    supabase
-      .from("recommendations")
-      .select("score, reason, investment:investments(id, name)")
-      .eq("user_id", user.id)
-      .order("score", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("transactions")
-      .select("total_value")
-      .order("created_at", { ascending: false })
-      .limit(120),
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("risk_profile")
+    .eq("id", user.id)
+    .single()
+
+  const baseUrl = getBaseUrl()
+  const [bvmtFeed, cryptoFeed, globalFeed] = await Promise.all([
+    fetchJson<BvmtFeedResponse>(`${baseUrl}/api/market/bvmt`),
+    fetchJson<CryptoFeedResponse>(`${baseUrl}/api/market/crypto`),
+    fetchJson<GlobalFeedResponse>(`${baseUrl}/api/market/global`),
   ])
 
-  const opportunities: InvestmentOpportunity[] =
-    investments?.map((investment) => ({
-      id: investment.id,
-      name: investment.name,
-      description: investment.description || "Curated investment thesis aligned with Tunisia-focused growth.",
-      expectedReturn: investment.expected_return,
-      minEntry: investment.min_amount,
-      sector: categoryLabels[investment.category] || investment.category,
-      budgetBand: toBudgetBand(investment.min_amount),
-      themeTag: toThemeTag(investment.category, investment.risk_level),
-      riskLevel: investment.risk_level,
-    })) || []
+  const catalog = buildInvestmentCatalog({
+    bvmtStocks: bvmtFeed?.data.stocks || [],
+    cryptoAssets: cryptoFeed?.data || [],
+    globalStocks: globalFeed?.data.stocks || [],
+  })
 
-  const totalLiquidity =
-    liquidityRows?.reduce((sum, row) => sum + (row.total_value || 0), 0) || 0
+  const opportunities = catalog.map(toDashboardOpportunity)
 
-  const marketSnapshot: MarketSnapshot = {
-    marketIndexLabel: "TUNINDEX",
-    marketIndexDelta: 0.42,
-    totalLiquidity,
-    activeProjects: opportunities.length,
-    targetFillPercent: 75,
-  }
+  const userRiskProfile: RiskProfile =
+    profile?.risk_profile === "conservative" ||
+    profile?.risk_profile === "moderate" ||
+    profile?.risk_profile === "aggressive"
+      ? profile.risk_profile
+      : "moderate"
 
-  const aiRecommendation = recommendation
-    ? {
-        score: recommendation.score,
-        title: `AI Recommendation for Your Budget`,
-        message:
-          recommendation.reason ||
-          "Based on your profile, this opportunity is currently one of the strongest matches.",
-        highlightedName: recommendation.investment?.name || undefined,
-      }
-    : {
-        score: 84,
-        title: "AI Recommendation for Your Budget",
-        message:
-          "Based on your recent behavior, we suggest exploring diversified opportunities with moderate risk and stable annual yield.",
-      }
+  const aiRecommendation = buildPublicAIRecommendation(
+    catalog,
+    userRiskProfile,
+  )
+
+  const marketSnapshot: MarketSnapshot = buildPublicMarketSnapshot(catalog)
 
   return (
     <InvestmentOpportunitiesTab

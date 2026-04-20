@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Bell,
   Building2,
@@ -53,11 +53,9 @@ interface InvestmentOpportunitiesTabProps {
   marketSnapshot: MarketSnapshot
 }
 
-const budgetFilters = ["All Opportunities", "< 1,000 TND", "1,000 - 10,000 TND", "> 10,000 TND"]
-
-const sectorFilters = ["All", "Bonds", "Funds", "Real Estate", "Stocks", "Crypto"]
-
 const iconBySector: Record<string, LucideIcon> = {
+  BVMT: Landmark,
+  "Global Market": Building2,
   Bonds: Landmark,
   Funds: Factory,
   "Real Estate": Building2,
@@ -98,9 +96,31 @@ export function InvestmentOpportunitiesTab({
   aiRecommendation,
   marketSnapshot,
 }: InvestmentOpportunitiesTabProps) {
+  const budgetFilters = useMemo(
+    () => ["All Opportunities", ...Array.from(new Set(opportunities.map((item) => item.budgetBand)))],
+    [opportunities],
+  )
+
+  const sectorFilters = useMemo(
+    () => ["All", ...Array.from(new Set(opportunities.map((item) => item.sector)))],
+    [opportunities],
+  )
+
   const [searchValue, setSearchValue] = useState("")
   const [activeBudget, setActiveBudget] = useState("All Opportunities")
   const [activeSector, setActiveSector] = useState("All")
+
+  useEffect(() => {
+    if (!budgetFilters.includes(activeBudget)) {
+      setActiveBudget("All Opportunities")
+    }
+  }, [activeBudget, budgetFilters])
+
+  useEffect(() => {
+    if (!sectorFilters.includes(activeSector)) {
+      setActiveSector("All")
+    }
+  }, [activeSector, sectorFilters])
 
   const filteredOpportunities = useMemo(() => {
     return opportunities.filter((item) => {
@@ -226,7 +246,7 @@ export function InvestmentOpportunitiesTab({
           </div>
         ) : (
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {filteredOpportunities.slice(0, 5).map((opportunity) => {
+            {filteredOpportunities.map((opportunity) => {
               const SectorIcon = iconBySector[opportunity.sector] || Leaf
 
               return (
