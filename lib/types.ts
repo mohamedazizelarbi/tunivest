@@ -43,6 +43,9 @@ export interface Portfolio {
   id: string;
   user_id: string;
   investment_id: string;
+  deal_key?: string;
+  display_name?: string;
+  deal_type?: string;
   amount: number;
   purchase_price: number;
   current_value: number;

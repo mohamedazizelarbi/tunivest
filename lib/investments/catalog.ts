@@ -178,9 +178,10 @@ function buildBvmtOpportunity(stock: BvmtStockFeedItem): InvestmentOpportunity {
   const marketMove = Number(stock.change_percent || 0)
   const minAmount = Math.max(100, stock.price * 10)
   const riskValue = 4 + Math.abs(marketMove) * 1.6 + riskFromVolume(stock.volume)
+  const stableId = makeStableOpportunityId("bvmt", stock.symbol, stock.name)
 
   return {
-    id: `bvmt-${stock.symbol}`,
+    id: stableId,
     name: stock.name,
     symbol: stock.symbol,
     description: `${stock.sector} equity tracked from the BVMT scraper with live pricing and daily momentum.`,
@@ -232,9 +233,10 @@ function buildGlobalOpportunity(stock: GlobalStockFeedItem): InvestmentOpportuni
   const marketCapRiskBoost = stock.market_cap >= 100_000_000_000 ? -0.6 : stock.market_cap >= 10_000_000_000 ? 0 : 0.6
   const riskValue = 5 + Math.abs(marketMove) * 0.9 + volumeRiskBoost + marketCapRiskBoost
   const minAmount = Math.max(120, Math.round(stock.price * 3))
+  const stableId = makeStableOpportunityId("global", stock.symbol, stock.name)
 
   return {
-    id: `global-${stock.symbol}`,
+    id: stableId,
     name: stock.name,
     symbol: stock.symbol,
     description: `${stock.sector || "Global Equity"} listed in ${stock.country || "global markets"}, sourced from Investing.com stock screener via scrape.do.`,
@@ -349,4 +351,18 @@ function clamp(value: number, min: number, max: number) {
 function average(values: number[]) {
   if (values.length === 0) return 0
   return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function normalizeIdPart(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24)
+}
+
+function makeStableOpportunityId(prefix: string, symbol: string, name: string) {
+  const symbolPart = normalizeIdPart(symbol) || "na"
+  const namePart = normalizeIdPart(name) || "asset"
+  return `${prefix}-${symbolPart}-${namePart}`
 }

@@ -279,7 +279,7 @@ export function InvestmentOpportunitiesTab({
                     </div>
                   </div>
 
-                  <Link href={`/dashboard/invest/${opportunity.id}`} className="mt-6">
+                  <Link href={`/investment/${opportunity.id}`} className="mt-6">
                     <Button className="w-full rounded-full">Explore Deal</Button>
                   </Link>
                 </article>
