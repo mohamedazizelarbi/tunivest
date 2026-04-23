@@ -134,3 +134,48 @@ export interface AdminStats {
   totalTransactions: number;
   totalVolume: number;
 }
+
+export interface AiRecommendationProfile {
+  user_id: string;
+  email: string | null;
+  full_name: string | null;
+  salary: number | null;
+  risk_profile: RiskProfile;
+  personality_type: PersonalityType | null;
+  age_range: AgeRange | null;
+  employment_status: EmploymentStatus | null;
+  monthly_income_range: MonthlyIncomeRange | null;
+  savings_range: SavingsRange | null;
+  risk_tolerance: RiskTolerance | null;
+  investment_knowledge: InvestmentKnowledge | null;
+  primary_goal: PrimaryGoal | null;
+  investment_duration: InvestmentDuration | null;
+  preferences: InvestmentPreference[];
+  budget_min_tnd: number | null;
+  budget_max_tnd: number | null;
+  completed_at: string | null;
+}
+
+export interface AiRecommendationInvestment {
+  id: string;
+  name: string;
+  description: string | null;
+  category: InvestmentCategory;
+  min_amount: number;
+  expected_return: number;
+  risk_level: number;
+  duration_months: number;
+}
+
+export interface AiRecommendationSuggestion {
+  investmentId: string;
+  name: string;
+  reason: string;
+  risk: string;
+  expectedReturn: number;
+}
+
+export interface AiRecommendationResponse {
+  summary: string;
+  recommendations: AiRecommendationSuggestion[];
+}

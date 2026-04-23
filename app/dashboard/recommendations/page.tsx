@@ -3,6 +3,14 @@ import Link from "next/link"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { AiRecommendationPanel } from "@/components/dashboard/ai-recommendation-panel"
+import { getBudgetFromSavings, mapToleranceToRiskProfile } from "@/lib/onboarding"
+import type {
+  AiRecommendationInvestment,
+  AiRecommendationProfile,
+  InvestmentPreference,
+  RiskTolerance,
+} from "@/lib/types"
 import { TrendingUp, Clock, AlertTriangle, ArrowRight, Lightbulb } from "lucide-react"
 
 const categoryLabels: Record<string, string> = {
@@ -25,6 +33,122 @@ const getRiskLabel = (risk: number) => {
   return "High Risk"
 }
 
+const durationTargets: Record<string, number> = {
+  short: 12,
+  medium: 24,
+  long: 60,
+}
+
+const preferenceCategoryMap: Record<InvestmentPreference, string[]> = {
+  stocks: ["stocks"],
+  crypto: ["crypto"],
+  real_estate: ["real_estate"],
+  forex: ["stocks", "crypto"],
+  business: ["stocks", "funds", "real_estate"],
+}
+
+function matchesPreference(investment: AiRecommendationInvestment, preferences: InvestmentPreference[]) {
+  if (preferences.length === 0) {
+    return true
+  }
+
+  return preferences.some((preference) => preferenceCategoryMap[preference]?.includes(investment.category))
+}
+
+function getTargetRisk(tolerance: RiskTolerance | null | undefined) {
+  if (tolerance === "low") return 3
+  if (tolerance === "high") return 8
+  return 5
+}
+
+function getTargetDurationMonths(duration: string | null | undefined) {
+  if (!duration) return 24
+  return durationTargets[duration] || 24
+}
+
+function scoreInvestment(
+  investment: AiRecommendationInvestment,
+  userProfile: {
+    budget_min_tnd: number | null
+    budget_max_tnd: number | null
+    risk_tolerance: RiskTolerance | null
+    investment_duration: string | null
+    preferences: InvestmentPreference[]
+  },
+) {
+  const budgetMin = userProfile.budget_min_tnd ?? 0
+  const budgetMax = userProfile.budget_max_tnd ?? 0
+  const targetRisk = getTargetRisk(userProfile.risk_tolerance)
+  const targetDuration = getTargetDurationMonths(userProfile.investment_duration)
+
+  let score = 0
+
+  if (budgetMax > 0) {
+    if (investment.min_amount <= budgetMax) {
+      score += 30
+    } else {
+      score -= Math.min(20, ((investment.min_amount - budgetMax) / budgetMax) * 20)
+    }
+
+    if (investment.min_amount >= budgetMin) {
+      score += 8
+    }
+  }
+
+  const riskDistance = Math.abs(investment.risk_level - targetRisk)
+  score += Math.max(0, 28 - riskDistance * 6)
+
+  const durationDistance = Math.abs(investment.duration_months - targetDuration)
+  score += Math.max(0, 18 - durationDistance / 2)
+
+  if (matchesPreference(investment, userProfile.preferences)) {
+    score += 18
+  }
+
+  if (investment.expected_return >= 10) {
+    score += 5
+  }
+
+  return score
+}
+
+function selectInvestmentCandidates(
+  investments: AiRecommendationInvestment[],
+  userProfile: {
+    budget_min_tnd: number | null
+    budget_max_tnd: number | null
+    risk_tolerance: RiskTolerance | null
+    investment_duration: string | null
+    preferences: InvestmentPreference[]
+  },
+) {
+  const scored = investments
+    .map((investment) => ({
+      ...investment,
+      score: scoreInvestment(investment, userProfile),
+    }))
+    .sort((left, right) => right.score - left.score)
+
+  const strictMatches = scored.filter((investment) => {
+    const budgetMax = userProfile.budget_max_tnd ?? 0
+    const targetRisk = getTargetRisk(userProfile.risk_tolerance)
+    const targetDuration = getTargetDurationMonths(userProfile.investment_duration)
+
+    return (
+      (budgetMax === 0 || investment.min_amount <= budgetMax) &&
+      Math.abs(investment.risk_level - targetRisk) <= 3 &&
+      Math.abs(investment.duration_months - targetDuration) <= 24 &&
+      matchesPreference(investment, userProfile.preferences)
+    )
+  })
+
+  if (strictMatches.length >= 5) {
+    return strictMatches.slice(0, 10).map(({ score, ...investment }) => investment)
+  }
+
+  return scored.slice(0, Math.min(10, Math.max(5, scored.length))).map(({ score, ...investment }) => investment)
+}
+
 export default async function RecommendationsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -42,9 +166,76 @@ export default async function RecommendationsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("risk_profile")
+    .select("email, full_name, salary, risk_profile")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
+
+  const { data: userProfile } = await supabase
+    .from("user_profile")
+    .select("personality_type, age_range, employment_status, monthly_income_range, savings_range, risk_tolerance, investment_knowledge, primary_goal, investment_duration, preferences, budget_min_tnd, budget_max_tnd, completed_at")
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  const { data: activeInvestments } = await supabase
+    .from("investments")
+    .select("id, name, description, category, min_amount, expected_return, risk_level, duration_months")
+    .eq("is_active", true)
+
+  const normalizedInvestments: AiRecommendationInvestment[] = (activeInvestments || []).map((investment) => ({
+    id: investment.id,
+    name: investment.name,
+    description: investment.description,
+    category: investment.category,
+    min_amount: Number(investment.min_amount),
+    expected_return: Number(investment.expected_return),
+    risk_level: Number(investment.risk_level),
+    duration_months: Number(investment.duration_months),
+  }))
+
+  const budgetRange = userProfile?.savings_range ? getBudgetFromSavings(userProfile.savings_range) : null
+  const derivedProfile = userProfile
+    ? {
+        user_id: user.id,
+        email: profile?.email ?? user.email ?? null,
+        full_name: profile?.full_name ?? null,
+        salary: profile?.salary ?? null,
+        risk_profile: profile?.risk_profile || mapToleranceToRiskProfile(userProfile.risk_tolerance || "medium"),
+        personality_type: userProfile.personality_type ?? null,
+        age_range: userProfile.age_range ?? null,
+        employment_status: userProfile.employment_status ?? null,
+        monthly_income_range: userProfile.monthly_income_range ?? null,
+        savings_range: userProfile.savings_range ?? null,
+        risk_tolerance: userProfile.risk_tolerance ?? null,
+        investment_knowledge: userProfile.investment_knowledge ?? null,
+        primary_goal: userProfile.primary_goal ?? null,
+        investment_duration: userProfile.investment_duration ?? null,
+        preferences: (userProfile.preferences || []) as InvestmentPreference[],
+        budget_min_tnd: budgetRange?.min ?? userProfile.budget_min_tnd ?? null,
+        budget_max_tnd: budgetRange?.max ?? userProfile.budget_max_tnd ?? null,
+        completed_at: userProfile.completed_at ?? null,
+      }
+    : null
+
+  const filteredInvestments =
+    derivedProfile && normalizedInvestments.length > 0
+      ? selectInvestmentCandidates(normalizedInvestments, {
+          budget_min_tnd: derivedProfile.budget_min_tnd,
+          budget_max_tnd: derivedProfile.budget_max_tnd,
+          risk_tolerance: derivedProfile.risk_tolerance,
+          investment_duration: derivedProfile.investment_duration,
+          preferences: derivedProfile.preferences,
+        })
+      : []
+
+  const aiRequestPayload = derivedProfile && filteredInvestments.length > 0
+    ? {
+        profile: {
+          ...derivedProfile,
+          preferences: Array.from(new Set(derivedProfile.preferences)),
+        } satisfies AiRecommendationProfile,
+        investments: filteredInvestments,
+      }
+    : null
 
   return (
     <div className="space-y-8">
@@ -69,6 +260,8 @@ export default async function RecommendationsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <AiRecommendationPanel requestPayload={aiRequestPayload} />
 
       {recommendations && recommendations.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
