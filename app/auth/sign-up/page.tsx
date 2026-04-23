@@ -14,8 +14,6 @@ export default function SignUpPage() {
   const router = useRouter()
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [salary, setSalary] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -38,17 +36,15 @@ export default function SignUpPage() {
     setLoading(true)
 
     const supabase = createClient()
+    const emailRedirectTo = `${window.location.origin}/auth/callback`
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo:
-          process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
-          `${window.location.origin}/auth/callback`,
+        emailRedirectTo,
         data: {
           full_name: fullName,
-          phone: phone || null,
-          salary: salary ? parseFloat(salary) : null,
         },
       },
     })
@@ -59,7 +55,9 @@ export default function SignUpPage() {
       return
     }
 
-    router.push("/auth/sign-up-success")
+    setLoading(false)
+    router.replace("/auth/sign-up-success")
+    router.refresh()
   }
 
   return (
@@ -108,29 +106,6 @@ export default function SignUpPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="phone">Phone (Optional)</FieldLabel>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+216 XX XXX XXX"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="salary">Monthly Salary in TND (Optional)</FieldLabel>
-                <Input
-                  id="salary"
-                  type="number"
-                  placeholder="2000"
-                  value={salary}
-                  onChange={(e) => setSalary(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Used to calculate your risk profile
-                </p>
               </Field>
               <Field>
                 <FieldLabel htmlFor="password">Password</FieldLabel>

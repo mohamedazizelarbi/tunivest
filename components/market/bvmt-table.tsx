@@ -35,6 +35,10 @@ const SECTOR_COLORS: Record<string, string> = {
   Distribution: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300",
 }
 
+function safeNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback
+}
+
 export function BVMTTable() {
   const { data, error, isLoading, mutate } = useSWR<BVMTData>(
     "/api/market/bvmt",
@@ -127,25 +131,30 @@ export function BVMTTable() {
           <>
             {/* Market Indices */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {data?.data.indices.map((index) => (
+              {data?.data.indices.map((index) => {
+                const indexChange = safeNumber(index.change)
+                const indexChangePercent = safeNumber(index.change_percent)
+                const indexValue = safeNumber(index.value)
+
+                return (
                 <Card key={index.name} className="border-border bg-muted/30">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-muted-foreground">{index.name}</span>
-                      <span className={`flex items-center gap-1 text-sm ${index.change_percent >= 0 ? "text-green-600" : "text-red-600"}`}>
-                        {index.change_percent >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        {index.change_percent >= 0 ? "+" : ""}{index.change_percent.toFixed(2)}%
+                      <span className={`flex items-center gap-1 text-sm ${indexChangePercent >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {indexChangePercent >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                        {indexChangePercent >= 0 ? "+" : ""}{indexChangePercent.toFixed(2)}%
                       </span>
                     </div>
                     <div className="mt-1 flex items-baseline gap-2">
-                      <span className="text-2xl font-bold text-foreground">{index.value.toLocaleString()}</span>
-                      <span className={`text-sm ${index.change >= 0 ? "text-green-600" : "text-red-600"}`}>
-                        {index.change >= 0 ? "+" : ""}{index.change.toFixed(2)}
+                      <span className="text-2xl font-bold text-foreground">{indexValue.toLocaleString()}</span>
+                      <span className={`text-sm ${indexChange >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {indexChange >= 0 ? "+" : ""}{indexChange.toFixed(2)}
                       </span>
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              )})}
             </div>
 
             {/* Sector Filter Tabs */}
@@ -175,7 +184,15 @@ export function BVMTTable() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredStocks.map((stock) => (
+                      {filteredStocks.map((stock) => {
+                        const stockPrice = safeNumber(stock.price)
+                        const stockChangePercent = safeNumber(stock.change_percent)
+                        const stockOpen = safeNumber(stock.open)
+                        const stockHigh = safeNumber(stock.high)
+                        const stockLow = safeNumber(stock.low)
+                        const stockVolume = safeNumber(stock.volume)
+
+                        return (
                         <TableRow key={stock.symbol} className="border-border hover:bg-muted/50">
                           <TableCell className="font-bold text-foreground">
                             {stock.symbol}
@@ -189,28 +206,28 @@ export function BVMTTable() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right font-mono font-medium text-foreground">
-                            {stock.price.toFixed(2)}
+                            {stockPrice.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <span className={`flex items-center justify-end gap-1 ${stock.change_percent >= 0 ? "text-green-600" : "text-red-600"}`}>
-                              {stock.change_percent >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                              {stock.change_percent >= 0 ? "+" : ""}{stock.change_percent.toFixed(2)}%
+                            <span className={`flex items-center justify-end gap-1 ${stockChangePercent >= 0 ? "text-green-600" : "text-red-600"}`}>
+                              {stockChangePercent >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                              {stockChangePercent >= 0 ? "+" : ""}{stockChangePercent.toFixed(2)}%
                             </span>
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
-                            {stock.open.toFixed(2)}
+                            {stockOpen.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-green-600">
-                            {stock.high.toFixed(2)}
+                            {stockHigh.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-red-600">
-                            {stock.low.toFixed(2)}
+                            {stockLow.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
-                            {stock.volume.toLocaleString()}
+                            {stockVolume.toLocaleString()}
                           </TableCell>
                         </TableRow>
-                      ))}
+                      )})}
                     </TableBody>
                   </Table>
                 </div>

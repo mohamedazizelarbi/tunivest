@@ -24,6 +24,19 @@ const categoryLabels: Record<string, string> = {
   crypto: "Crypto",
 }
 
+function getAllocationLabel(item: Portfolio & { investment: Investment | null }) {
+  if (item.deal_type && item.deal_type.trim().length > 0) {
+    return item.deal_type
+  }
+
+  const category = item.investment?.category
+  if (category) {
+    return categoryLabels[category] || category
+  }
+
+  return "Other"
+}
+
 export function PortfolioChart({ portfolio }: PortfolioChartProps) {
   if (portfolio.length === 0) {
     return (
@@ -40,18 +53,18 @@ export function PortfolioChart({ portfolio }: PortfolioChartProps) {
     )
   }
 
-  // Group by category
-  const categoryData = portfolio.reduce((acc, item) => {
-    const category = item.investment?.category || "other"
-    if (!acc[category]) {
-      acc[category] = 0
+  // Group by deal type first, then fallback to investment category.
+  const allocationData = portfolio.reduce((acc, item) => {
+    const allocationLabel = getAllocationLabel(item)
+    if (!acc[allocationLabel]) {
+      acc[allocationLabel] = 0
     }
-    acc[category] += item.current_value
+    acc[allocationLabel] += item.current_value
     return acc
   }, {} as Record<string, number>)
 
-  const chartData = Object.entries(categoryData).map(([category, value]) => ({
-    name: categoryLabels[category] || category,
+  const chartData = Object.entries(allocationData).map(([allocationLabel, value]) => ({
+    name: allocationLabel,
     value,
   }))
 

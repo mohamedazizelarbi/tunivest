@@ -24,6 +24,16 @@ export default async function DashboardLayout({
     redirect("/admin")
   }
 
+  const { data: onboarding } = await supabase
+    .from("user_profile")
+    .select("completed_at")
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (!onboarding?.completed_at) {
+    redirect("/onboarding")
+  }
+
   return (
     <div className="flex min-h-screen">
       <DashboardSidebar profile={profile} />

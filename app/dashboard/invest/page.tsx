@@ -1,12 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
-import {
-  InvestmentOpportunitiesView,
-  type PublicAIRecommendation,
-  type PublicMarketSnapshot,
-  type PublicOpportunity,
-} from "@/components/investments/investment-opportunities-view"
+import { InvestmentOpportunitiesTab, type InvestmentOpportunity, type MarketSnapshot } from "@/components/dashboard/investment-opportunities-tab"
 import type { RiskProfile } from "@/lib/types"
 import {
   buildInvestmentCatalog,
@@ -66,23 +59,37 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
-export default async function InvestmentsPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+function categoryLabelToSector(sourceLabel: string) {
+  return sourceLabel
+}
 
-  let profile: { email: string; full_name: string | null; is_admin: boolean; risk_profile?: RiskProfile } | null = null
-
-  if (user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("email, full_name, is_admin, risk_profile")
-      .eq("id", user.id)
-      .single()
-
-    profile = data
+function toDashboardOpportunity(
+  item: ReturnType<typeof buildInvestmentCatalog>[number],
+): InvestmentOpportunity {
+  return {
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    expectedReturn: item.expectedReturn,
+    minEntry: item.minAmount,
+    sector: categoryLabelToSector(item.sourceLabel),
+    budgetBand: item.budgetBand,
+    themeTag: item.themeTag,
+    riskLevel: item.riskLevel,
   }
+}
+
+export default async function InvestOpportunitiesPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("risk_profile")
+    .eq("id", user.id)
+    .single()
 
   const baseUrl = getBaseUrl()
   const [bvmtFeed, cryptoFeed, globalFeed] = await Promise.all([
@@ -91,11 +98,13 @@ export default async function InvestmentsPage() {
     fetchJson<GlobalFeedResponse>(`${baseUrl}/api/market/global`),
   ])
 
-  const opportunities = buildInvestmentCatalog({
+  const catalog = buildInvestmentCatalog({
     bvmtStocks: bvmtFeed?.data.stocks || [],
     cryptoAssets: cryptoFeed?.data || [],
     globalStocks: globalFeed?.data.stocks || [],
-  }) as PublicOpportunity[]
+  })
+
+  const opportunities = catalog.map(toDashboardOpportunity)
 
   const userRiskProfile: RiskProfile =
     profile?.risk_profile === "conservative" ||
@@ -104,33 +113,18 @@ export default async function InvestmentsPage() {
       ? profile.risk_profile
       : "moderate"
 
-  const aiRecommendation: PublicAIRecommendation = buildPublicAIRecommendation(opportunities, userRiskProfile)
-  const marketSnapshot: PublicMarketSnapshot = buildPublicMarketSnapshot(opportunities)
+  const aiRecommendation = buildPublicAIRecommendation(
+    catalog,
+    userRiskProfile,
+  )
 
-  const sourceNotes = [bvmtFeed?.note, cryptoFeed?.message, globalFeed?.note].filter(Boolean)
+  const marketSnapshot: MarketSnapshot = buildPublicMarketSnapshot(catalog)
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header user={profile} />
-      <main className="flex-1">
-        <section className="py-10 lg:py-12">
-          <div className="mx-auto max-w-7xl px-4 lg:px-8">
-            {sourceNotes.length > 0 ? (
-              <div className="mb-6 rounded-xl border border-primary/20 bg-primary/5 p-4">
-                <p className="text-sm text-foreground/80">{sourceNotes.join(" ")}</p>
-              </div>
-            ) : null}
-
-            <InvestmentOpportunitiesView
-              opportunities={opportunities}
-              isLoggedIn={!!user}
-              aiRecommendation={aiRecommendation}
-              marketSnapshot={marketSnapshot}
-            />
-          </div>
-        </section>
-      </main>
-      <Footer />
-    </div>
+    <InvestmentOpportunitiesTab
+      opportunities={opportunities}
+      aiRecommendation={aiRecommendation}
+      marketSnapshot={marketSnapshot}
+    />
   )
 }

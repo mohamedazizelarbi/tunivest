@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TrendingUp, TrendingDown } from "lucide-react"
+import { PortfolioDeleteButton } from "@/components/dashboard/portfolio-delete-button"
 
 const categoryLabels: Record<string, string> = {
   bonds: "Bonds",
@@ -49,12 +50,15 @@ export default async function PortfolioPage() {
               <Card key={item.id} className="border-border">
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
-                    <CardTitle className="text-lg text-foreground">
-                      {item.investment?.name || "Unknown"}
-                    </CardTitle>
-                    <Badge variant="outline" className="text-muted-foreground">
-                      {item.investment ? categoryLabels[item.investment.category] || item.investment.category : "N/A"}
-                    </Badge>
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg text-foreground">
+                        {item.display_name || item.investment?.name || "Unknown"}
+                      </CardTitle>
+                      <Badge variant="outline" className="text-muted-foreground">
+                        {item.deal_type || (item.investment ? categoryLabels[item.investment.category] || item.investment.category : "N/A")}
+                      </Badge>
+                    </div>
+                    <PortfolioDeleteButton portfolioId={item.id} />
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
