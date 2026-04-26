@@ -77,19 +77,24 @@ function buildInvestmentLookup(investments: AiRecommendationInvestment[]) {
   return { byId, byName }
 }
 
-function resolveInvestment(candidate: Record<string, unknown>, investments: AiRecommendationInvestment[]) {
+function resolveInvestment(
+  candidate: Record<string, unknown>,
+  investments: AiRecommendationInvestment[],
+): AiRecommendationInvestment | null {
   const { byId, byName } = buildInvestmentLookup(investments)
 
+  // Prioritize matching by a unique ID. Handles prefixed IDs like 'live:BTC' or DB UUIDs.
   const directId = candidate.investmentId ?? candidate.investment_id ?? candidate.id
-  if (typeof directId === "string") {
+  if (typeof directId === "string" && directId) {
     const matchedById = byId.get(directId)
     if (matchedById) {
       return matchedById
     }
   }
 
+  // Fallback to matching by name, as AI might return the name instead of the ID.
   const directName = candidate.name ?? candidate.investment_name ?? candidate.title
-  if (typeof directName === "string") {
+  if (typeof directName === "string" && directName) {
     const matchedByName = byName.get(normalizeText(directName))
     if (matchedByName) {
       return matchedByName
@@ -320,29 +325,39 @@ export async function POST(request: NextRequest) {
     const normalized: AiRecommendationResponse = {
       summary: extractSummary(payload),
       recommendations: extractRecommendations(payload, trimmedInvestments),
+      source: "zapier",
     }
 
     const rawText = extractRawText(payload)
     if (normalized.recommendations.length === 0 && trimmedInvestments.length > 0) {
       normalized.recommendations = buildFallbackRecommendations(trimmedInvestments)
-      normalized.summary = rawText || normalized.summary
+      normalized.summary =
+        rawText || "The AI service did not return valid recommendations, so we've selected the top matches from your catalog."
+      normalized.source = "fallback"
     }
 
     return NextResponse.json({
       success: true,
-      source: "zapier",
       data: normalized,
     })
   } catch (error) {
     const isTimeout = error instanceof Error && error.name === "AbortError"
 
+    // On timeout or any other error, return a fallback response
+    const fallbackData: AiRecommendationResponse = {
+      summary: isTimeout
+        ? "The AI recommendation service timed out. Here are some top matches from your catalog instead."
+        : "The AI recommendation service is currently unavailable. Here are some top matches from your catalog.",
+      recommendations: buildFallbackRecommendations(trimmedInvestments),
+      source: "fallback",
+    }
+
     return NextResponse.json(
       {
-        error: isTimeout
-          ? "Zapier webhook timed out. Please try again."
-          : "Unable to reach the AI recommendation service.",
+        success: true, // We are still returning a valid response, just not from the AI
+        data: fallbackData,
       },
-      { status: isTimeout ? 504 : 502 },
+      { status: 200 }, // Return 200 OK as we are providing a fallback
     )
   } finally {
     clearTimeout(timeoutId)

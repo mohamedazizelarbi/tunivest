@@ -178,4 +178,5 @@ export interface AiRecommendationSuggestion {
 export interface AiRecommendationResponse {
   summary: string;
   recommendations: AiRecommendationSuggestion[];
+  source: "zapier" | "fallback";
 }

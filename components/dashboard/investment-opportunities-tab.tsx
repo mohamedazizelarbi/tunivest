@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import {
   Bell,
@@ -24,6 +23,8 @@ export interface InvestmentOpportunity {
   id: string
   name: string
   description: string
+  symbol?: string
+  source?: "bvmt" | "crypto" | "global"
   expectedReturn: number
   minEntry: number
   sector: string
@@ -91,19 +92,273 @@ function getTagTone(tag: string) {
   return "bg-emerald-100 text-emerald-700"
 }
 
+function normalizeFilterLabel(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ")
+}
+
+function getSourceFilterLabel(opportunity: InvestmentOpportunity) {
+  if (opportunity.source === "bvmt") return "BVMT"
+  if (opportunity.source === "crypto") return "Crypto"
+  if (opportunity.source === "global") return "Global Market"
+  return opportunity.sector
+}
+
+function slugify(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
+function getBvmtInvestingEquityPath(name: string) {
+  const normalizedName = normalizeCompanyName(name)
+
+  const byName: Record<string, string> = {
+    "automobile reseau tunisien et service": "automobile-reseau-tunisien-et-service",
+    "astree sa": "astree-sa",
+    atb: "atb",
+    atl: "atl",
+    "bh bank": "bh-bank",
+    biat: "biat",
+    bna: "bna",
+    "attijari bank": "attijari-bank",
+    bt: "bt",
+    btei: "btei",
+    "carthage cement": "carthage-cement",
+    cil: "cil",
+    icf: "icf",
+    "societe tunisienne des marches de gros": "societe-tunisienne-des-marches-de-gros",
+    "bh leasing": "bh-leasing",
+    "societe nouvelle maison de la ville de tunis": "societe-nouvelle-maison-de-la-ville-de-tunis",
+    "ennakl automobiles": "ennakl-automobiles",
+    "placement de tunisie": "placement-de-tunisie",
+    "poulina group holding": "poulina-group-holding",
+    "les ciments de bizerte": "les-ciments-de-bizerte",
+    sfbt: "sfbt",
+    siam: "siam",
+    simpar: "simpar",
+    sits: "sits",
+    "magasin general": "magazin-gneral",
+    essoukna: "essoukna",
+    somocer: "somocer",
+    "societe tunisienne d entreprises de telecommunications": "societe-tunisienne-d-entreprises-de-telecommunications",
+    "spdit-sicaf": "spdit-sicaf",
+    star: "star",
+    stb: "stb",
+    stip: "stip",
+    sotrapil: "sotrapil",
+    "tun invest sicar": "tun-invest-sicar",
+    "attijari leasing": "attijari-leasing",
+    telnet: "telnet",
+    "tunisie leasing": "tunisie-leasing",
+    tpr: "tpr",
+    "tunis re": "tunis-re",
+    ubci: "ubci",
+    uib: "uib",
+    "el wifack leasing": "el-wifack-leasing",
+    "societe tunisienne de verreries": "societe-tunisienne-de-verreries",
+    "bh assurance": "bh-assurance",
+    landor: "landor",
+    "new body line": "new-body-line",
+    "one tech holding": "one-tech-holding",
+    "societe tunisienne industrielle du papier et du carton": "societe-tunisienne-industrielle-du-papier-et-du-carton",
+    sotemail: "sotemail",
+    sah: "sah",
+    "hannibal lease": "hannibal-lease",
+    "city cars": "city-cars",
+    "euro-cycles": "euro-cycles",
+    "manufacture de panneaux bois du sud": "manufacture-de-panneaux-bois-du-sud",
+    "best lease": "best-lease",
+    "delice holding": "delice-holding",
+    "amen bank": "amen-bank",
+  }
+
+  if (byName[normalizedName]) {
+    return byName[normalizedName]
+  }
+
+  return slugify(name)
+}
+
+function getBvmtCustomUrl(opportunity: InvestmentOpportunity) {
+  const normalizedSymbol = normalizeTickerSymbol(opportunity.symbol || "")
+  const normalizedName = normalizeCompanyName(opportunity.name)
+  const normalizedId = opportunity.id.toLowerCase()
+
+  // Force Monoprix to ilboursa even if feed formatting changes.
+  if (
+    normalizedSymbol === "MNP" ||
+    normalizedName === "monoprix" ||
+    normalizedName.includes("monoprix") ||
+    normalizedName.includes("maison de la ville de tunis") ||
+    normalizedId.includes("mnp") ||
+    normalizedId.includes("monoprix")
+  ) {
+    return "https://www.ilboursa.com/marches/cotation_MNP"
+  }
+
+  const bySymbol: Record<string, string> = {
+    MNP: "https://www.ilboursa.com/marches/cotation_MNP",
+    DH: "https://www.ilboursa.com/marches/cotation_DH",
+    TPR: "https://www.investing.com/equities/soc.-tun.-profiles-aluminium",
+    SFBT: "https://www.ilboursa.com/marches/cotation_SFBT",
+    BIAT: "https://www.investing.com/equities/banque-inter.-arabe-de-tunisie",
+    CIL: "https://www.investing.com/equities/compagnie-int.-de-leasing",
+    UIB: "https://www.investing.com/equities/union-internationale-de-banque",
+  }
+
+  if (normalizedSymbol && bySymbol[normalizedSymbol]) {
+    return bySymbol[normalizedSymbol]
+  }
+
+  const byName: Record<string, string> = {
+    monoprix: "https://www.ilboursa.com/marches/cotation_MNP",
+    mnp: "https://www.ilboursa.com/marches/cotation_MNP",
+    "societe nouvelle maison de la ville de tunis": "https://www.ilboursa.com/marches/cotation_MNP",
+    "societe nouvelle maison de la ville de tunis sa": "https://www.ilboursa.com/marches/cotation_MNP",
+    "delice holding": "https://www.ilboursa.com/marches/cotation_DH",
+    tpr: "https://www.investing.com/equities/soc.-tun.-profiles-aluminium",
+    "tpr tunisie profiles reunis": "https://www.investing.com/equities/soc.-tun.-profiles-aluminium",
+    "tunisie profiles reunis": "https://www.investing.com/equities/soc.-tun.-profiles-aluminium",
+    "tunisie profiles reunis sa": "https://www.investing.com/equities/soc.-tun.-profiles-aluminium",
+    sfbt: "https://www.ilboursa.com/marches/cotation_SFBT",
+    biat: "https://www.investing.com/equities/banque-inter.-arabe-de-tunisie",
+    cil: "https://www.investing.com/equities/compagnie-int.-de-leasing",
+    uib: "https://www.investing.com/equities/union-internationale-de-banque",
+  }
+
+  if (byName[normalizedName]) {
+    return byName[normalizedName]
+  }
+
+  if (normalizedName.includes("tpr") && normalizedName.includes("tunisie") && normalizedName.includes("reunis")) {
+    return "https://www.investing.com/equities/soc.-tun.-profiles-aluminium"
+  }
+
+  return null
+}
+
+function shouldHideOpportunity(opportunity: InvestmentOpportunity) {
+  return normalizeCompanyName(opportunity.name) === "assurances maghrebia"
+}
+
+function normalizeTickerSymbol(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9.]/g, "")
+}
+
+function normalizeCompanyName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+}
+
+function toTradingViewSymbolPage(exchange: string, symbol: string) {
+  return `https://www.tradingview.com/symbols/${encodeURIComponent(`${exchange}-${symbol}`)}/`
+}
+
+function getGlobalTradingViewTarget(opportunity: InvestmentOpportunity): { exchange: string; symbol: string } | null {
+  const symbol = normalizeTickerSymbol(opportunity.symbol || "")
+  const companyName = normalizeCompanyName(opportunity.name)
+
+  const byName: Record<string, { exchange: string; symbol: string }> = {
+    visa: { exchange: "TSX", symbol: "VISA" },
+    "jpmorgan": { exchange: "NYSE", symbol: "JPM" },
+    "jpmorgan chase": { exchange: "NYSE", symbol: "JPM" },
+    toyota: { exchange: "NYSE", symbol: "TM" },
+    "toyota motor": { exchange: "NYSE", symbol: "TM" },
+    "sap se": { exchange: "XETR", symbol: "SAP" },
+    sap: { exchange: "XETR", symbol: "SAP" },
+    "alibaba": { exchange: "NYSE", symbol: "BABA" },
+    "ali baba": { exchange: "NYSE", symbol: "BABA" },
+    "asml holding": { exchange: "NASDAQ", symbol: "ASML" },
+    asml: { exchange: "NASDAQ", symbol: "ASML" },
+  }
+
+  if (byName[companyName]) {
+    return byName[companyName]
+  }
+
+  const byTicker: Record<string, string> = {
+    VISA: "TSX",
+    V: "TSX",
+    JPM: "NYSE",
+    TM: "NYSE",
+    SAP: "XETR",
+    BABA: "NYSE",
+    ASML: "NASDAQ",
+  }
+
+  if (symbol) {
+    return {
+      exchange: byTicker[symbol] || "NASDAQ",
+      symbol,
+    }
+  }
+
+  return null
+}
+
+function getExploreDealHref(opportunity: InvestmentOpportunity) {
+  if (opportunity.source === "crypto" || opportunity.id.startsWith("live:crypto")) {
+    return `https://coinmarketcap.com/currencies/${slugify(opportunity.name)}/`
+  }
+
+  if (opportunity.source === "bvmt" || opportunity.id.startsWith("live:bvmt")) {
+    const customUrl = getBvmtCustomUrl(opportunity)
+
+    if (customUrl) {
+      return customUrl
+    }
+
+    const equityPath = getBvmtInvestingEquityPath(opportunity.name)
+
+    if (equityPath) {
+      return `https://www.investing.com/equities/${equityPath}`
+    }
+
+    return `https://www.investing.com/search/?q=${encodeURIComponent(opportunity.name)}`
+  }
+
+  if (opportunity.source === "global" || opportunity.id.startsWith("live:global")) {
+    const target = getGlobalTradingViewTarget(opportunity)
+
+    if (target) {
+      return toTradingViewSymbolPage(target.exchange, target.symbol)
+    }
+
+    return `https://www.tradingview.com/search/?query=${encodeURIComponent(opportunity.name)}`
+  }
+
+  return `/investment/${opportunity.id}`
+}
+
+function isExternalUrl(url: string) {
+  return url.startsWith("http://") || url.startsWith("https://")
+}
+
 export function InvestmentOpportunitiesTab({
   opportunities,
   aiRecommendation,
   marketSnapshot,
 }: InvestmentOpportunitiesTabProps) {
-  const budgetFilters = useMemo(
-    () => ["All Opportunities", ...Array.from(new Set(opportunities.map((item) => item.budgetBand)))],
+  const visibleOpportunities = useMemo(
+    () => opportunities.filter((item) => !shouldHideOpportunity(item)),
     [opportunities],
   )
 
+  const budgetFilters = useMemo(
+    () => ["All Opportunities", ...Array.from(new Set(visibleOpportunities.map((item) => item.budgetBand)))],
+    [visibleOpportunities],
+  )
+
   const sectorFilters = useMemo(
-    () => ["All", ...Array.from(new Set(opportunities.map((item) => item.sector)))],
-    [opportunities],
+    () => ["All", ...Array.from(new Set(visibleOpportunities.map((item) => getSourceFilterLabel(item))))],
+    [visibleOpportunities],
   )
 
   const [searchValue, setSearchValue] = useState("")
@@ -123,17 +378,18 @@ export function InvestmentOpportunitiesTab({
   }, [activeSector, sectorFilters])
 
   const filteredOpportunities = useMemo(() => {
-    return opportunities.filter((item) => {
+    return visibleOpportunities.filter((item) => {
       const matchesSearch =
         item.name.toLowerCase().includes(searchValue.toLowerCase()) ||
         item.description.toLowerCase().includes(searchValue.toLowerCase())
 
       const matchesBudget = activeBudget === "All Opportunities" || item.budgetBand === activeBudget
-      const matchesSector = activeSector === "All" || item.sector === activeSector
+      const matchesSector =
+        activeSector === "All" || normalizeFilterLabel(getSourceFilterLabel(item)) === normalizeFilterLabel(activeSector)
 
       return matchesSearch && matchesBudget && matchesSector
     })
-  }, [activeBudget, activeSector, opportunities, searchValue])
+  }, [activeBudget, activeSector, searchValue, visibleOpportunities])
 
   return (
     <div className="space-y-8">
@@ -248,6 +504,8 @@ export function InvestmentOpportunitiesTab({
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredOpportunities.map((opportunity) => {
               const SectorIcon = iconBySector[opportunity.sector] || Leaf
+              const exploreHref = getExploreDealHref(opportunity)
+              const openInNewTab = isExternalUrl(exploreHref)
 
               return (
                 <article
@@ -279,9 +537,14 @@ export function InvestmentOpportunitiesTab({
                     </div>
                   </div>
 
-                  <Link href={`/investment/${opportunity.id}`} className="mt-6">
+                  <a
+                    href={exploreHref}
+                    className="mt-6 block"
+                    target={openInNewTab ? "_blank" : undefined}
+                    rel={openInNewTab ? "noopener noreferrer" : undefined}
+                  >
                     <Button className="w-full rounded-full">Explore Deal</Button>
-                  </Link>
+                  </a>
                 </article>
               )
             })}

@@ -74,6 +74,7 @@ export function AiRecommendationPanel({ requestPayload }: AiRecommendationPanelP
     }
   }
 
+  const isOnboardingComplete = !!requestPayload?.profile.completed_at
   const candidateCount = requestPayload?.investments.length || 0
 
   return (
@@ -93,7 +94,7 @@ export function AiRecommendationPanel({ requestPayload }: AiRecommendationPanelP
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Button onClick={handleGenerate} disabled={loading || !requestPayload} className="gap-2">
+          <Button onClick={handleGenerate} disabled={loading || !isOnboardingComplete} className="gap-2">
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -111,9 +112,9 @@ export function AiRecommendationPanel({ requestPayload }: AiRecommendationPanelP
           </p>
         </div>
 
-        {!requestPayload && (
+        {!isOnboardingComplete && (
           <div className="rounded-lg bg-amber-100 p-3 text-sm text-amber-900">
-            Finish onboarding to unlock personalized AI recommendations.
+            Finish your onboarding profile to unlock personalized AI recommendations.
           </div>
         )}
 
@@ -130,7 +131,14 @@ export function AiRecommendationPanel({ requestPayload }: AiRecommendationPanelP
             <Card className="border-border bg-background/80">
               <CardContent className="flex items-start gap-3 py-4">
                 <AlertTriangle className="mt-1 h-5 w-5 text-secondary-foreground" />
-                <p className="text-sm text-muted-foreground">{result.summary}</p>
+                <div>
+                  {result.source === "fallback" && (
+                    <p className="mb-2 text-sm font-semibold text-foreground">
+                      The AI service is currently unavailable.
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground">{result.summary}</p>
+                </div>
               </CardContent>
             </Card>
 
@@ -159,7 +167,7 @@ export function AiRecommendationPanel({ requestPayload }: AiRecommendationPanelP
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-border bg-background/60 p-6 text-sm text-muted-foreground">
-                Zapier did not return any structured recommendations. Try again or adjust your profile filters.
+                The AI service did not return any structured recommendations. Try again or adjust your profile filters.
               </div>
             )}
           </>

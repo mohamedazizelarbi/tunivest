@@ -70,6 +70,8 @@ function toDashboardOpportunity(
     id: item.id,
     name: item.name,
     description: item.description,
+    symbol: item.symbol,
+    source: item.source,
     expectedReturn: item.expectedReturn,
     minEntry: item.minAmount,
     sector: categoryLabelToSector(item.sourceLabel),
