@@ -28,9 +28,8 @@ const navigation = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Users", href: "/admin/users", icon: Users },
   { name: "Investments", href: "/admin/investments", icon: Briefcase },
-  { name: "Transactions", href: "/admin/transactions", icon: History },
-  { name: "Reports", href: "/admin/reports", icon: BarChart3 },
-  { name: "Settings", href: "/admin/settings", icon: Settings },
+  { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+  { name: "AI Settings", href: "/admin/ai-settings", icon: Settings },
 ]
 
 export function AdminSidebar({ profile }: AdminSidebarProps) {

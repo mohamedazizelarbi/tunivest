@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+const RESERVED_ADMIN_EMAILS = new Set(['admin67@gmail.com'])
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
   const code = searchParams.get('code')
@@ -18,13 +20,29 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}/auth/login`)
       }
 
+      if (user.email && RESERVED_ADMIN_EMAILS.has(user.email.toLowerCase())) {
+        return NextResponse.redirect(`${origin}/admin`)
+      }
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('is_admin')
         .eq('id', user.id)
         .single()
 
-      if (profile?.is_admin) {
+      let effectiveProfile = profile
+
+      if (!effectiveProfile?.is_admin && user.email) {
+        const { data: emailProfile } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('email', user.email)
+          .maybeSingle()
+
+        effectiveProfile = emailProfile ?? effectiveProfile
+      }
+
+      if (effectiveProfile?.is_admin) {
         return NextResponse.redirect(`${origin}/admin`)
       }
 

@@ -34,8 +34,9 @@ export default function LoginPage() {
       return
     }
 
-    router.push("/dashboard")
-    router.refresh()
+    // Let the dashboard layout handle the redirect
+    router.push('/dashboard');
+    router.refresh();
   }
 
   return (

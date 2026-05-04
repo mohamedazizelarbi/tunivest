@@ -1,45 +1,48 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
+import { Toaster } from "@/components/ui/toaster"
+import { getCurrentUserProfile } from "@/lib/supabase/admin"
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+    const supabase = await createClient();
 
-  if (!user) {
-    redirect("/auth/login")
-  }
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single()
+    if (!user) {
+        return redirect('/auth/login');
+    }
 
-  if (profile?.is_admin) {
-    redirect("/admin")
-  }
+    const profile = await getCurrentUserProfile()
 
-  const { data: onboarding } = await supabase
-    .from("user_profile")
-    .select("completed_at")
-    .eq("user_id", user.id)
-    .maybeSingle()
+    if (profile?.is_admin) {
+        return redirect('/admin');
+    }
 
-  if (!onboarding?.completed_at) {
-    redirect("/onboarding")
-  }
+    // Check if onboarding is complete
+    const { data: onboarding } = await supabase
+        .from('user_profile')
+        .select('completed_at')
+        .eq('user_id', user.id)
+        .maybeSingle(); // Use maybeSingle to avoid error if multiple rows exist
 
-  return (
-    <div className="flex min-h-screen">
-      <DashboardSidebar profile={profile} />
-      <main className="flex-1 bg-muted/30 p-6 lg:p-8">
-        {children}
-      </main>
-    </div>
-  )
+    if (!onboarding?.completed_at) {
+        return redirect('/onboarding');
+    }
+
+    return (
+        <div className="flex h-screen">
+          <DashboardSidebar profile={profile} />
+          <main className="flex-1 p-4 md:p-6 lg:p-8">
+            {children}
+            <Toaster />
+          </main>
+        </div>
+    )
 }
